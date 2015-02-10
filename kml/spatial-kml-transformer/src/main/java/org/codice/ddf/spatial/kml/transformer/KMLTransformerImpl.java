@@ -43,6 +43,8 @@ import javax.xml.bind.Unmarshaller;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.stream.StreamSource;
 
+import com.github.jknack.handlebars.Context;
+import ddf.action.ActionProvider;
 import org.apache.commons.lang3.StringUtils;
 import org.osgi.framework.BundleContext;
 import org.slf4j.Logger;
@@ -116,6 +118,8 @@ public class KMLTransformerImpl implements KMLTransformer {
 
     private KmlStyleMap styleMapper;
 
+    private DescriptionTemplateHelper templateHelper;
+
     static {
         try {
             KML_MIMETYPE = new MimeType("application/vnd.google-earth.kml+xml");
@@ -125,10 +129,10 @@ public class KMLTransformerImpl implements KMLTransformer {
     }
 
     public KMLTransformerImpl(BundleContext bundleContext, String defaultStylingName,
-            KmlStyleMap mapper) {
+            KmlStyleMap mapper, ActionProvider actionProvider) {
         this.context = bundleContext;
         this.styleMapper = mapper;
-
+        this.templateHelper = new DescriptionTemplateHelper(actionProvider);
 
         URL stylingUrl = context.getBundle().getResource(defaultStylingName);
 
@@ -244,10 +248,10 @@ public class KMLTransformerImpl implements KMLTransformer {
 
         String description = entry.getTitle();
         Handlebars handlebars = new Handlebars(templateLoader);
-        handlebars.registerHelpers(new DescriptionTemplateHelper(url, platformConfiguration));
+        handlebars.registerHelpers(templateHelper);
         try {
             Template template = handlebars.compile(DESCRIPTION_TEMPLATE);
-            description = template.apply(entry);
+            description = template.apply(new HandlebarsMetacard(entry));
             LOGGER.debug(description);
             
         } catch (IOException e) {
@@ -326,9 +330,13 @@ public class KMLTransformerImpl implements KMLTransformer {
     }
 
     private Geometry addPointToKmlGeo(Geometry kmlGeo, com.vividsolutions.jts.geom.Coordinate vertex) {
-        de.micromata.opengis.kml.v_2_2_0.Point kmlPoint = KmlFactory.createPoint()
-                .addToCoordinates(vertex.x, vertex.y);
-        return KmlFactory.createMultiGeometry().addToGeometry(kmlPoint).addToGeometry(kmlGeo);
+        if(null != vertex) {
+            de.micromata.opengis.kml.v_2_2_0.Point kmlPoint = KmlFactory.createPoint()
+                    .addToCoordinates(vertex.x, vertex.y);
+            return KmlFactory.createMultiGeometry().addToGeometry(kmlPoint).addToGeometry(kmlGeo);
+        } else {
+            return null;
+        }
     }
 
     @Override
